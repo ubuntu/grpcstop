@@ -43,12 +43,12 @@ func main() {
 	if os.Args[1] == "server" {
 		fmt.Println("Starting")
 		// Get socket fd from systemd
-		fd, err := strconv.Atoi(os.Getenv("LISTEN_FDS"))
+		fd, err := strconv.Atoi(os.Getenv("SD_LISTEN_FDS_START"))
 		if err != nil || fd == 0 {
 			log.Fatalf("No socket passed by systemd: %v", err)
 		}
 		syscall.CloseOnExec(fd)
-		f := os.NewFile(uintptr(2+fd), filepath.Base(socket))
+		f := os.NewFile(uintptr(fd), filepath.Base(socket))
 		f.Close()
 		lis, err := net.FileListener(f)
 		if err != nil {
