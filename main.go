@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -42,15 +41,12 @@ func main() {
 	// Server listening
 	if os.Args[1] == "server" {
 		fmt.Println("Starting")
-		// Get socket fd from systemd
-		fd, err := strconv.Atoi(os.Getenv("SD_LISTEN_FDS_START"))
-		if err != nil || fd == 0 {
-			log.Fatalf("No socket passed by systemd: %v", err)
-		}
+		// Get socket fd from systemd (only one socket, harcode for testing)
+		fd := 3
 		syscall.CloseOnExec(fd)
 		f := os.NewFile(uintptr(fd), filepath.Base(socket))
-		f.Close()
 		lis, err := net.FileListener(f)
+		f.Close()
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
