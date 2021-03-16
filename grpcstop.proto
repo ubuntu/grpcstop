@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "main";
+
+service GrpcStop {
+    rpc Stop(Empty) returns (Empty);
+    rpc Wait(Empty) returns (Empty);
+}
+
+message Empty{}
