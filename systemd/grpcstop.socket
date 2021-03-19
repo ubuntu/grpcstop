@@ -1,9 +1,0 @@
-[Unit]
-Description=Socket activation for GRPCStop daemon
-PartOf=grpcstop.service
-
-[Socket]
-ListenStream=/tmp/grpcstop.socket
-
-[Install]
-WantedBy=sockets.target

@@ -1,8 +1,0 @@
-[Unit]
-Description=GRPCStop daemon service
-After=grpcstop.socket
-Requires=grpcstop.socket
-
-[Service]
-Type=oneshot
-ExecStart=/tmp/grpcstop server

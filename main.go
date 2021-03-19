@@ -2,20 +2,16 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"flag"
 	"net"
 	"os"
-	"path/filepath"
-	"syscall"
-	"time"
 
+	log "github.com/golang/glog"
 	"google.golang.org/grpc"
 )
 
 const (
-	socket   = "/tmp/grpcstop.socket"
-	waitTime = time.Second * 30
+	socket = "/tmp/grpcstop.socket"
 )
 
 type service struct {
@@ -38,58 +34,51 @@ func unixDialer() func(ctx context.Context, addr string) (net.Conn, error) {
 //go:generate protoc --proto_path=. --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative grpcstop.proto
 
 func main() {
-	// Server listening
-	if os.Args[1] == "server" {
-		fmt.Println("Starting")
-		// Get socket fd from systemd (only one socket, harcode for testing)
-		fd := 3
-		syscall.CloseOnExec(fd)
-		f := os.NewFile(uintptr(fd), filepath.Base(socket))
-		lis, err := net.FileListener(f)
-		f.Close()
-		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
-		}
+	flag.Parse()
 
-		s := grpc.NewServer()
-		RegisterGrpcStopServer(s, &service{server: s})
+	// Server listening
+	os.Remove(socket)
+	lis, err := net.Listen("unix", socket)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	RegisterGrpcStopServer(s, &service{server: s})
+	serverdone := make(chan struct{})
+	go func() {
+		defer close(serverdone)
 		if err := s.Serve(lis); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}
-		return
-	}
+	}()
+
+	log.Info("Server ready")
 
 	// Client
 	conn, err := grpc.Dial(socket, grpc.WithInsecure(),
 		grpc.WithContextDialer(unixDialer()),
 	)
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("client did not connect: %v", err)
 	}
-	defer conn.Close()
 	c := NewGrpcStopClient(conn)
-	switch os.Args[1] {
-	case "wait":
-		if _, err := c.Wait(context.Background(), &Empty{}); err != nil {
-			log.Fatal(err)
-		}
-	case "stop":
-		if _, err := c.Stop(context.Background(), &Empty{}); err != nil {
-			log.Fatal(err)
-		}
-	default:
-		log.Fatalf("unknown command: %s", os.Args[1])
+	if _, err := c.Stop(context.Background(), &Empty{}); err != nil {
+		conn.Close()
+		log.Fatal(err)
 	}
+	conn.Close()
+	log.Info("Client Stopped")
+
+	<-serverdone
+	log.Info("Server Stopped")
 }
 
 // Stop requests server for graceful stop.
 func (s *service) Stop(context.Context, *Empty) (*Empty, error) {
-	go s.server.GracefulStop()
-	return &Empty{}, nil
-}
-
-// Wait waits block the request for a while before ending up.
-func (s *service) Wait(context.Context, *Empty) (*Empty, error) {
-	time.Sleep(waitTime)
+	go func() {
+		log.Info("GracefulStop requested")
+		s.server.GracefulStop()
+		log.Info("GracefulStop done")
+	}()
 	return &Empty{}, nil
 }
